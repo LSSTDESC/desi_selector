@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 import fastparquet
 
 path_healpix_ids = '/global/homes/y/yoki/roman/desi_like_samples/skysim_5000/data/healpix_ids/id_nums_exclude_edges.npy'
-path_sfr_thres = str(Path(f'../data/selection_thresholds/elg_sfr_thres.npy'))
+path_sfr_thres = '/global/homes/y/yoki/roman/desi_like_samples/skysim_5000/data/selection_thresholds/elg_sfr_thres.npy'
 healpix_ids = np.load(path_healpix_ids)
 sfr_thres = np.load(path_sfr_thres)
 
@@ -38,54 +38,31 @@ RAND_TO_DATA_RATIO = 10
 # load in the desi ELG distributions 
 path_desi_data = '/global/homes/y/yoki/roman/desi_like_samples/skysim_5000/data/desi_sv_data/desi_elg_ts_zenodo/main-800coaddefftime1200-nz-zenodo.ecsv'
 desi_data = table.Table.read(path_desi_data, format='ascii.ecsv')
-desi_data.colnames
 zmin = desi_data['ZMIN']
 zmax = desi_data['ZMAX']
 
-SELECTION_ZBIN_WIDTH = (np.max(zmax) - np.min(zmin)) / (Z_GRID_POINTS - 1)
-
-lop_north = desi_data['ELG_LOP_NORTH']
-lop_south_decal = desi_data['ELG_LOP_SOUTH_DECALS']
-lop_south_des = desi_data['ELG_LOP_SOUTH_DES']
-vlo_north = desi_data['ELG_VLO_NORTH']
-vlo_south_decal = desi_data['ELG_VLO_SOUTH_DECALS']
-vlo_south_des = desi_data['ELG_VLO_SOUTH_DES']
-
-lop_desi = desi_data['ELG_LOP_DESI']
-vlo_desi = desi_data['ELG_VLO_DESI']
-weightedavg = (lop_north * LOP_NORTH_AREA + lop_south_decal * LOP_SOUTH_DECAL_AREA  + lop_south_des * LOP_SOUTH_DES_AREA  )/(TOTAL_DESI_AREA)
-
 z_bin_centers = (zmin + zmax ) / 2 
-n_of_z = interpolate.interp1d(z_bin_centers, weightedavg / DESI_ELG_ZBIN_WIDTH,  fill_value=0, bounds_error=False) 
 thres_of_z = interpolate.interp1d(z_bin_centers, sfr_thres,  fill_value=9E11, bounds_error=False)
 
 
-
-zgrid = np.linspace(np.min(zmin), np.max(zmax), Z_GRID_POINTS)
-
-
-def save_mock_elg_sample(healpix_id=None, area_per_healpix=AREA_PER_HEALPIX):
-    # print(f'{worker_index} is processing {healpix_id}')
+def save_mock_elg_sample(healpix_id=None):
     
-
-    cat_list = []
+    cat_list= []
     z_range_skysim = [[0,1], [1,2]]
 
+    
     for z in z_range_skysim:
-        
-        filepath = '/global/cfs/cdirs/lsst/shared/xgal/skysim/skysim5000_v1.1.1'
-        h5_filename = f'/z_{z[0]}_{z[1]}.step_all.healpix_{healpix_id}.hdf5' # assuming all healpix files have same root file name
-        h5f = filepath + h5_filename
+
+        filepath = f'/global/cfs/cdirs/lsst/shared/xgal/skysim/skysim5000_v1.1.1/z_{z[0]}_{z[1]}.step_all.healpix_{healpix_id}.hdf5'
     
-    
-        with h5py.File(h5f, 'r') as file:
+        with h5py.File(filepath, 'r') as file:
          
             
             properties = file['galaxyProperties']
             redshift = np.array(properties['redshift'])
             redshift_hubble = np.array(properties['redshiftHubble'])
-            s = cosmo.comoving_distance(redshift).value
-            rp = cosmo.comoving_distance(redshift_hubble).value
+            distance = cosmo.comoving_distance(redshift).value
+            distance_hubble = cosmo.comoving_distance(redshift_hubble).value
             sfr = np.array(properties['baseDC2']['sfr'])
             sfr_tot = np.array(properties['totalStarFormationRate'])
             stellar_mass = np.array(properties['totalMassStellar'])
@@ -103,11 +80,11 @@ def save_mock_elg_sample(healpix_id=None, area_per_healpix=AREA_PER_HEALPIX):
             dec_true = np.array(properties['dec_true'])
 
 
-            array_list = np.column_stack([redshift, redshift_hubble, s, rp, sfr, sfr_tot, stellar_mass, blackhole_mass, gal_id, mag_u,
+            array_list = np.column_stack([redshift, redshift_hubble, distance, distance_hubble, sfr, sfr_tot, stellar_mass, blackhole_mass, gal_id, mag_u,
                                         mag_g, mag_r, mag_i, mag_z, mag_y
                                           , ra, dec, ra_true, dec_true])
 
-            sim_cat_in = pd.DataFrame(array_list, columns=['redshift', 'redshift_hubble', 's', 'rp', 'sfr','sfr_tot','stellar_mass','blackhole_mass','gal_id','mag_u', 'mag_g', 'mag_r', 'mag_i', 'mag_z', 'mag_y', 'ra', 'dec', 'ra_true', 'dec_true'])
+            sim_cat_in = pd.DataFrame(array_list, columns=['redshift', 'redshift_hubble', 'distance', 'distance_hubble', 'sfr','sfr_tot','stellar_mass','blackhole_mass','gal_id','mag_u', 'mag_g', 'mag_r', 'mag_i', 'mag_z', 'mag_y', 'ra', 'dec', 'ra_true', 'dec_true'])
             edge_mask = np.logical_and(sim_cat_in['ra'] < NEAR_360, sim_cat_in['ra'] > NEAR_0)
             cat_list.append(sim_cat_in[edge_mask])
     
@@ -115,14 +92,14 @@ def save_mock_elg_sample(healpix_id=None, area_per_healpix=AREA_PER_HEALPIX):
 
         sim_cat = pd.concat(cat_list)
         
-        print(f'the number of galaxies in this cat is {len(sim_cat)}')
+        # print(f'the number of galaxies in this cat is {len(sim_cat)}')
         
-        RA_MIN = np.min(ra[edge_mask])
-        RA_MAX = np.max(ra[edge_mask])
+        ra_min = np.min(ra[edge_mask])
+        ra_max = np.max(ra[edge_mask])
         
-        rand_ra = RA_MIN + (RA_MAX - RA_MIN)*np.random.random(size=NUM_POINTS)
-        cth_min = np.min(np.sin(np.radians(sim_cat['dec'][edge_mask])))
-        cth_max = np.max(np.sin(np.radians(sim_cat['dec'][edge_mask])))
+        rand_ra = ra_min + (ra_max - ra_min)*np.random.random(size=NUM_POINTS)
+        cth_min = np.min(np.sin(np.radians(sim_cat['dec'])))
+        cth_max = np.max(np.sin(np.radians(sim_cat['dec'])))
         cth_rand = cth_min + (cth_max - cth_min)*np.random.random(size=NUM_POINTS)
         rand_dec = np.degrees(np.arcsin(cth_rand))
         
@@ -137,8 +114,9 @@ def save_mock_elg_sample(healpix_id=None, area_per_healpix=AREA_PER_HEALPIX):
         
         rand_cols_list = np.column_stack([rand_ra[rand_hpix_mask], rand_dec[rand_hpix_mask]])
         rand_cat = pd.DataFrame(rand_cols_list, columns=['ra', 'dec'])
+
         
-        print(f'The number of galaxies that pass hpix mask is {np.sum(rand_hpix_mask)}')
+        # print(f'The number of galaxies that pass hpix mask is {np.sum(rand_hpix_mask)}')
 
 
         elg_theta = np.radians(90.0 - sim_cat['dec'])  
@@ -158,9 +136,14 @@ def save_mock_elg_sample(healpix_id=None, area_per_healpix=AREA_PER_HEALPIX):
         sfr_mask = sim_cat_masked['sfr_tot'] > threshold_all
         mock_elg_cat = sim_cat_masked[sfr_mask]
 
-        # add r_p and s to random catalog
-        rand_cat['rp'] = np.random.choice(mock_elg_cat['rp'], size=len(rand_cat))
-        rand_cat['s'] = np.random.choice(mock_elg_cat['s'], size=len(rand_cat))
+        # add distances and redshift to random catalog
+        rand_cat = rand_cat.reset_index(drop=True) 
+        mock_elg_cat_temp = mock_elg_cat.reset_index(drop=True).sample(len(rand_cat), replace=True)
+
+
+        rand_cat['distance'] = mock_elg_cat_temp['distance'].to_numpy()
+        rand_cat['distance_hubble'] = mock_elg_cat_temp['distance_hubble'].to_numpy()
+        rand_cat['redshift'] = mock_elg_cat_temp['redshift'].to_numpy()
         
         # mask the random cat to have around ten times as many objects as the mock elg cat
         NUM_TO_KEEP = len(mock_elg_cat) * RAND_TO_DATA_RATIO # number of objects to keep for randoms
@@ -188,7 +171,5 @@ if __name__ == '__main__':
 
     for pixel_id in healpix_ids[rank::size]:
         save_mock_elg_sample(pixel_id)
-
- 
 
  
