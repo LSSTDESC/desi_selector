@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 from scipy import interpolate
+from scipy import signal
 from astropy import table
 import h5py
 import healpy as hp
@@ -13,9 +14,9 @@ from astropy import units as u
 import matplotlib.pyplot as plt
 import fastparquet
 
-#
+# 
 path_healpix_ids = '/global/homes/y/yoki/roman/desi_like_samples/skysim_5000/data/healpix_ids/id_nums_exclude_edges.npy'
-path_sfr_thres = '/global/homes/y/yoki/roman/desi_like_samples/skysim_5000/data/selection_thresholds/elg_sfr_thres.npy'
+path_sfr_thres = '/global/homes/y/yoki/roman/desi_like_samples/skysim_5000/data/selection_thresholds/elg_sfr_thres_1000bins.npy'
 healpix_ids = np.load(path_healpix_ids)
 sfr_thres = np.load(path_sfr_thres)
 
@@ -24,7 +25,7 @@ LOP_SOUTH_DECAL_AREA = 8500
 LOP_SOUTH_DES_AREA = 1100
 TOTAL_DESI_AREA = 14000
 DESI_ELG_ZBIN_WIDTH = 0.05
-Z_GRID_POINTS = 201
+Z_GRID_POINTS = 1001
 AREA_PER_HEALPIX = 57.071968/17 # Area of 17 healpix divided by 17
 ELG_TARG_DENS_AVG = (1930 + 1950 + 1900) / 3
 LOP_ELG_MAG_CUTOFF = 26
@@ -42,13 +43,17 @@ desi_data = table.Table.read(path_desi_data, format='ascii.ecsv')
 zmin = desi_data['ZMIN']
 zmax = desi_data['ZMAX']
 
-z_bin_centers = (zmin + zmax ) / 2 
-thres_of_z = interpolate.interp1d(z_bin_centers, sfr_thres,  fill_value=9E11, bounds_error=False)
+new_zmin = np.linspace(np.min(zmin), np.max(zmax), Z_GRID_POINTS)[:-1]
+new_zmax = np.linspace(np.min(zmin), np.max(zmax), Z_GRID_POINTS)[1:]
+new_z_center = (new_zmax + new_zmin)/2
+# z_bin_centers = (zmin + zmax ) / 2 
+# smooth_thres = signal.convolve(sfr_thres, np.array([1/5, 1/5, 1/5, 1/5, 1/5]), mode='same')
+thres_of_z = interpolate.interp1d(new_z_center, sfr_thres,  fill_value=9E11, bounds_error=False)
 
 
 def save_mock_elg_sample(healpix_id=None):
     
-    cat_list= []
+    cat_list = []
     z_range_skysim = [[0,1], [1,2]]
 
     
@@ -116,8 +121,6 @@ def save_mock_elg_sample(healpix_id=None):
         rand_cols_list = np.column_stack([rand_ra[rand_hpix_mask], rand_dec[rand_hpix_mask]])
         rand_cat = pd.DataFrame(rand_cols_list, columns=['ra', 'dec'])
 
-        
-        # print(f'The number of galaxies that pass hpix mask is {np.sum(rand_hpix_mask)}')
 
 
         elg_theta = np.radians(90.0 - sim_cat['dec'])  
@@ -172,5 +175,8 @@ if __name__ == '__main__':
 
     for pixel_id in healpix_ids[rank::size]:
         save_mock_elg_sample(pixel_id)
+
+ 
+
 
  
