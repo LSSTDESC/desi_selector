@@ -13,6 +13,7 @@ from astropy import units as u
 import matplotlib.pyplot as plt
 import fastparquet
 
+#
 path_healpix_ids = '/global/homes/y/yoki/roman/desi_like_samples/skysim_5000/data/healpix_ids/id_nums_exclude_edges.npy'
 path_sfr_thres = '/global/homes/y/yoki/roman/desi_like_samples/skysim_5000/data/selection_thresholds/elg_sfr_thres.npy'
 healpix_ids = np.load(path_healpix_ids)
