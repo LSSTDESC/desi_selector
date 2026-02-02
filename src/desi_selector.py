@@ -183,6 +183,7 @@ class DesiSelector:
     
     def generate_threshold(self):
         
+        
         thres_list = []
         for i in range(len(self.new_z_center)):
             
@@ -201,16 +202,57 @@ class DesiSelector:
 
     def produce_desi_mock(self):
 
+        
         thres_of_z = interpolate.interp1d(self.new_z_center, self.thres_list,  fill_value=9E20, bounds_error=False)
         threshold_all = thres_of_z(self.sim_cat['redshift_true'])
         mask_abundance = self.sim_cat[self.threshold_col] > threshold_all
-        desi_mock_cat = self.sim_cat[mask_abundance]
+        mock_cat = self.sim_cat[mask_abundance]
 
-        return desi_mock_cat
+        return mock_cat
 
-    # def apply_color_cuts
+    def produce_desi_rands(self, mock_cat):
+        
+        
+        RAND_TO_DATA_RATIO = 10
+        npatches = len(self.sim_patches)
+        ntot = int(len(mock_elg_cat)* RAND_TO_DATA_RATIO / npatches)
+        lc_path = '/global/homes/y/yoki/roman/desi_like_samples/diffsky/data/lc_metadata/lc_cores-decomposition.txt'
+        lc_cores_decomp = lightcone_utils.read_lc_ra_dec_patch_decomposition(lc_path)[0]
+        theta_low = lc_cores_decomp[:,1]
+        theta_high = lc_cores_decomp[:,2]
+        phi_low = lc_cores_decomp[:,3]
+        phi_high = lc_cores_decomp[:,4]
     
-    # def generate_mock_randoms
+    
+        ra_min, dec_max = lightcone_utils.get_ra_dec_from_theta_phi(theta_low, phi_low)
+        ra_max, dec_min = lightcone_utils.get_ra_dec_from_theta_phi(theta_high, phi_high)
+        ran_key = jran.PRNGKey(0)
+    
+        
+        list_ra = []
+        list_dec = []
+        
+        for patch in self.sim_patches:
+            
+            ra_loop, dec_loop = lc_utils.mc_lightcone_random_ra_dec(ran_key=ran_key, npts=ntot, ra_min=ra_min[patch],
+            ra_max=ra_max[patch], dec_min=dec_min[patch], dec_max=dec_max[patch])
+    
+            list_ra.append(ra_loop)
+            list_dec.append(dec_loop)
+                                        
+            
+        rand_ra = np.concatenate(list_ra)
+        rand_dec = np.concatenate(list_dec)
+            
+        list_rand_cols = np.column_stack([rand_ra, rand_dec])
+        rand_cat = pd.DataFrame(list_rand_cols, columns=['ra', 'dec'])
+        rand_cat = rand_cat.reset_index(drop=True) 
+        mock_cat_temp = mock_cat.reset_index(drop=True).sample(len(rand_cat), replace=True)
+        rand_cat['distance'] = mock_cat_temp['distance'].to_numpy()
+        rand_cat['redshift_true'] = mock_elg_cat_temp['redshift_true'].to_numpy()
+    
+        return rand_cat
+    
         
     # def measure_auto_corr(self):
 
