@@ -62,11 +62,11 @@ class DesiSelector:
     
     # def load_sim_cat(self):
         
-        dict_model_calibrations = {'tng': 'tng_2025_11_06', 
-                           'um': 'smdpl_dr1_2025_11_07',
-                           'gal': 'galacticus_in_plus_ex_situ_2025_11_10',
-                           'hlwas_cosmos': 'hlwas_cosmos_260120_UM_2026_01_22',
-                           'cosmos': 'cosmos_260120_UM_2026_01_21'}
+        dict_model_calibrations = {'tng': 'tng_latest', 
+                           'um': 'smdpl_dr1_latest',
+                           'gal': 'galacticus_in_plus_ex_situ_latest',
+                           'hlwas_cosmos': 'hlwas_cosmos_260120_UM_latest',
+                           'cosmos': 'cosmos_260120_UM_latest'}
         
         path_sim_data = Path(f"{self.path_sim}/{dict_model_calibrations[self.model_calibration]}")
         list_sim_data = list(f for f in path_sim_data.glob("*.hdf5") if f.stem.startswith("lc_cores"))
