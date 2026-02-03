@@ -13,7 +13,16 @@ import jax.random as jran
 
 
 class DesiSelector:
+    
 
+    # Cosmology used for the Diffsky sims 
+    OMEGA_C = 0.26067
+    OMEGA_B = 0.049
+    h = 0.6766
+    N_S = 0.9665
+    SIGMA8 = 0.8102
+    cosmo = LambdaCDM(H0=h * 100, Om0=OMEGA_C + OMEGA_B, Ode0=1 - (OMEGA_C + OMEGA_B))
+    
     def __init__(self, 
                  desi_tracer,
                  path_desi_tracer,
@@ -34,6 +43,9 @@ class DesiSelector:
         self.z_range = z_range
         self.z_grid_points = z_grid_points
 
+
+        
+        
         # column to use for threshold calculation
         if self.desi_tracer == 'bgs':
             self.threshold_col = 'lsst_r'
@@ -77,6 +89,7 @@ class DesiSelector:
         dataset = dataset.select(columns)
         dataset = dataset.with_redshift_range(self.z_range[0], self.z_range[1])
         sim_cat = dataset.data.to_pandas()
+        sim_cat['distance'] = DesiSelector.cosmo.comoving_distance(sim_cat['redshift_true']).value
 
         if self.desi_tracer == 'lrg':
             sim_cat.rename(columns={'logmp_obs': 'log_halo_mass'}, inplace=True)
@@ -210,12 +223,12 @@ class DesiSelector:
 
         return mock_cat
 
-    def produce_desi_rands(self, mock_cat):
-        
-        
+    def produce_desi_rands(self, mock_cat=None):
+
+
         RAND_TO_DATA_RATIO = 10
         npatches = len(self.sim_patches)
-        ntot = int(len(mock_elg_cat)* RAND_TO_DATA_RATIO / npatches)
+        ntot = int(len(mock_cat)* RAND_TO_DATA_RATIO / npatches)
         lc_path = '/global/homes/y/yoki/roman/desi_like_samples/diffsky/data/lc_metadata/lc_cores-decomposition.txt'
         lc_cores_decomp = lightcone_utils.read_lc_ra_dec_patch_decomposition(lc_path)[0]
         theta_low = lc_cores_decomp[:,1]
@@ -249,7 +262,7 @@ class DesiSelector:
         rand_cat = rand_cat.reset_index(drop=True) 
         mock_cat_temp = mock_cat.reset_index(drop=True).sample(len(rand_cat), replace=True)
         rand_cat['distance'] = mock_cat_temp['distance'].to_numpy()
-        rand_cat['redshift_true'] = mock_elg_cat_temp['redshift_true'].to_numpy()
+        rand_cat['redshift_true'] = mock_cat_temp['redshift_true'].to_numpy()
     
         return rand_cat
     
