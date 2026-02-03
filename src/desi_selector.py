@@ -69,7 +69,7 @@ class DesiSelector:
                            'cosmos': 'cosmos_260120_UM_2026_01_21'}
         
         path_sim_data = Path(f"{self.path_sim}/{dict_model_calibrations[self.model_calibration]}")
-        list_sim_data = list(path_sim_data.glob("*.hdf5"))
+        list_sim_data = list(f for f in path_sim_data.glob("*.hdf5") if f.stem.startswith("lc_cores"))
         
         dataset = oc.open(list_sim_data)
 
