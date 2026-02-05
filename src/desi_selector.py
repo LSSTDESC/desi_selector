@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 from scipy import interpolate
 from astropy import table
-import h5py
 from pathlib import Path
 from astropy.cosmology import LambdaCDM
 from scipy.interpolate import interp1d
@@ -183,7 +182,9 @@ class DesiSelector:
         values, edges = np.histogram(self.sim_cat['redshift_true'], bins=zgrid)
         values_sim = values / self.sim_area
         z_frac = interp_nz_avg / values_sim
+        z_frac = np.nan_to_num(z_frac, nan=0.0)
         z_frac = np.minimum(z_frac, np.ones(len(z_frac))*0.99)
+        
 
         self.new_z_bin_min = new_z_bin_min
         self.new_z_center = new_z_center
@@ -196,8 +197,8 @@ class DesiSelector:
     
     def generate_threshold(self):
         
-        
         thres_list = []
+        
         for i in range(len(self.new_z_center)):
             
             this_zmin = self.new_z_bin_min[i]
@@ -205,9 +206,13 @@ class DesiSelector:
             this_cat = self.sim_cat[np.logical_and(self.sim_cat['redshift_true']>this_zmin, self.sim_cat['redshift_true']<this_zmax)]
         
             if len(this_cat) == 0:
+                
                 print(f"Empty bin: zmin={this_zmin}, zmax={this_zmax}")
-            
-            this_thres = np.percentile(a = this_cat[self.threshold_col], q = 100-self.z_frac[i]*100)
+                this_thres = 10**50 # set threshold to high value to not select anything
+
+            else:
+                this_thres = np.percentile(a = this_cat[self.threshold_col], q = 100-self.z_frac[i]*100)
+
             thres_list.append(this_thres)
                         
                      
