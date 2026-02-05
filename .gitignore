@@ -1,0 +1,11 @@
+##
+*.csv
+*.hdf5
+*.parquet
+.ipynb_checkpoints/
+__pycache__/
+*.pyc
+.DS_Store
+*.egg-info/
+.venv/
+venv/
