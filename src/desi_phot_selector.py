@@ -89,7 +89,10 @@ class DesiPhotSelector:
             mask_g_mag = self.sim_cat['lsst_g'] < G_MAG_LIMIT
             mask_photometry = np.logical_and(mask_color, mask_g_mag)
 
-        return mock_cat[mask_photometry]
+
+        mock_cat = self.sim_cat[mask_photometry]
+        
+        return mock_cat
 
     
     def produce_desi_rands(self, mock_cat=None):
