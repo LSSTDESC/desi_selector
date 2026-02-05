@@ -3,7 +3,6 @@ import numpy as np
 import pandas as pd
 from scipy import interpolate
 from astropy import table
-import h5py
 from pathlib import Path
 from astropy.cosmology import LambdaCDM
 from scipy.interpolate import interp1d
@@ -63,7 +62,6 @@ class DesiPhotSelector:
         
         
         dataset = dataset.select(columns)
-        dataset = dataset.with_redshift_range(self.z_range[0], self.z_range[1])
         sim_cat = dataset.data.to_pandas()
         sim_cat['distance'] = DesiPhotSelector.cosmo.comoving_distance(sim_cat['redshift_true']).value
         self.sim_cat = sim_cat
