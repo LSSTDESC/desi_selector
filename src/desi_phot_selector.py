@@ -9,7 +9,7 @@ from scipy.interpolate import interp1d
 from diffsky.experimental import lc_utils
 from diffsky.data_loaders.hacc_utils import lightcone_utils
 import jax.random as jran
-
+import treecorr as tc
 
 class DesiPhotSelector:
     
@@ -137,7 +137,55 @@ class DesiPhotSelector:
         rand_cat['redshift_true'] = mock_cat_temp['redshift_true'].to_numpy()
     
         return rand_cat
+
+   
+    def measure_autocorr(self, mock_cat, rand_cat, z_range_clustering=[0.8, 1.1], min_sep=1, max_sep=200, nbins=100):
     
+
+        
+        mask_mock_z_cut = np.logical_and(mock_cat['redshift_true'] > z_range_clustering[0], mock_cat['redshift_true'] < z_range_clustering[1]) 
+        mock_cat = mock_cat[mask_mock_z_cut]
+    
+        mask_rand_z_cut = np.logical_and(rand_cat['redshift_true'] > z_range_clustering[0], rand_cat['redshift_true'] < z_range_clustering[1]) 
+        rand_cat = rand_cat[mask_rand_z_cut]
+    
+        ra = mock_cat['ra']
+        dec = mock_cat['dec']
+        s = mock_cat['distance']
+        
+        ra_rand = rand_cat['ra']
+        dec_rand = rand_cat['dec']
+        s_rand = rand_cat['distance']
+    
+        print('The ratio of data to randoms is:', len(ra_rand)/ len(ra))
+    
+        # calculate the correlation using s
+    
+        dg_to_r = np.pi / 180
+        
+        tc_cat_s = tc.Catalog(ra=ra*dg_to_r, dec=dec*dg_to_r, r=s, ra_units='radians', dec_units='radians')
+        tc_rnd_s = tc.Catalog(ra=ra_rand*dg_to_r, dec=dec_rand*dg_to_r, r=s_rand, ra_units='radians', dec_units='radians')
+        
+        
+        dd_s = tc.NNCorrelation(min_sep=min_sep, max_sep=max_sep, nbins=nbins)
+        dr_s = tc.NNCorrelation(min_sep=min_sep, max_sep=max_sep, nbins=nbins)
+        rr_s = tc.NNCorrelation(min_sep=min_sep, max_sep=max_sep, nbins=nbins)
+        
+        dd_s.process(tc_cat_s, metric='Euclidean')
+        dr_s.process(tc_cat_s, tc_rnd_s, metric='Euclidean')
+        rr_s.process(tc_rnd_s, metric='Euclidean')
+        xi_s, var_xi = dd_s.calculateXi(rr=rr_s, dr=dr_s)
+        xi_s_naive, var_xi_naive = dd_s.calculateXi(rr=rr_s)
+        sep = DesiSelector.cosmo.h * np.exp(dd_s.meanlogr)
+    
+        return {'sep': sep,
+               'xi': xi_s,
+                'var_xi': var_xi,
+               'dd': dd_s,
+               'dr': dr_s,
+               "rr": rr_s,
+               "xi_naive": xi_s_naive,
+               'var_xi_naive': var_xi_naive}
         
     # def measure_auto_corr(self):
 
