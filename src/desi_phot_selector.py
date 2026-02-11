@@ -176,7 +176,7 @@ class DesiPhotSelector:
         rr_s.process(tc_rnd_s, metric='Euclidean')
         xi_s, var_xi = dd_s.calculateXi(rr=rr_s, dr=dr_s)
         xi_s_naive, var_xi_naive = dd_s.calculateXi(rr=rr_s)
-        sep = DesiSelector.cosmo.h * np.exp(dd_s.meanlogr)
+        sep = DesiPhotSelector.cosmo.h * np.exp(dd_s.meanlogr)
     
         return {'sep': sep,
                'xi': xi_s,
