@@ -10,6 +10,8 @@ from diffsky.experimental import lc_utils
 from diffsky.data_loaders.hacc_utils import lightcone_utils
 import jax.random as jran
 import treecorr as tc
+import healpy as hp
+
 
 class DesiPhotSelector:
     
@@ -26,15 +28,13 @@ class DesiPhotSelector:
                  desi_tracer,
                  path_sim,
                  model_calibration,
-                 sim_patches,
-                 sim_area=1121
+                 sim_patches
                  ):
 
         self.desi_tracer = desi_tracer
         self.path_sim = path_sim
         self.model_calibration = model_calibration
         self.sim_patches = sim_patches
-        self.sim_area = sim_area
 
     
 
@@ -47,6 +47,15 @@ class DesiPhotSelector:
         path_sim_data = Path(f"{self.path_sim}/{dict_model_calibrations[self.model_calibration]}")
         list_sim_data = list(f for f in path_sim_data.glob("*.hdf5") if f.stem.startswith("lc_cores"))
         dataset = oc.open(list_sim_data)
+
+        # Calculate the total area the mocks span on the sky 
+        dataset = oc.open(list_sim_data)
+        pixels = dataset.region.pixels
+        nside = dataset.region.nside
+        sim_area = len(pixels)*hp.nside2pixarea(nside, degrees=True)
+        self.sim_area=sim_area
+
+        print(f'The total area spanned by these mocks is: {self.sim_area}'
 
         if self.desi_tracer == 'bgs':
             columns = ['ra', 'dec', 'redshift_true', 'lsst_r']
