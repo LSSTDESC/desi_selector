@@ -55,7 +55,7 @@ class DesiPhotSelector:
         sim_area = len(pixels)*hp.nside2pixarea(nside, degrees=True)
         self.sim_area=sim_area
 
-        print(f'The total area spanned by these mocks is: {self.sim_area}'
+        print(f'The total area spanned by these mocks is: {self.sim_area}')
 
         if self.desi_tracer == 'bgs':
             columns = ['ra', 'dec', 'redshift_true', 'lsst_r']
