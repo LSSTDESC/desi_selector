@@ -37,7 +37,6 @@ class DesiSelector:
         self.path_desi_tracer = path_desi_tracer
         self.path_sim = path_sim
         self.model_calibration = model_calibration
-        self.sim_patches = sim_patches
         self.z_range = z_range
         self.z_grid_points = z_grid_points
 

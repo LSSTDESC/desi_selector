@@ -33,7 +33,6 @@ class DesiPhotSelector:
         self.desi_tracer = desi_tracer
         self.path_sim = path_sim
         self.model_calibration = model_calibration
-        self.sim_patches = sim_patches
 
     
 
