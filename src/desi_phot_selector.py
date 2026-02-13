@@ -27,8 +27,7 @@ class DesiPhotSelector:
     def __init__(self, 
                  desi_tracer,
                  path_sim,
-                 model_calibration,
-                 sim_patches
+                 model_calibration
                  ):
 
         self.desi_tracer = desi_tracer
@@ -53,9 +52,13 @@ class DesiPhotSelector:
         pixels = dataset.region.pixels
         nside = dataset.region.nside
         sim_area = len(pixels)*hp.nside2pixarea(nside, degrees=True)
-        self.sim_area=sim_area
+        self.sim_area = sim_area
 
-        print(f'The total area spanned by these mocks is: {self.sim_area}')
+        print(f'The total area spanned by the mocks in {dict_model_calibrations[self.model_calibration]} is: {self.sim_area}')
+
+        # Get the patches that the mocks correspond to
+        sim_patches = np.unique(dataset.data['lc_patch'])
+        self.sim_patches = sim_patches
 
         if self.desi_tracer == 'bgs':
             columns = ['ra', 'dec', 'redshift_true', 'lsst_r']

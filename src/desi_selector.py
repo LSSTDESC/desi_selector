@@ -29,7 +29,6 @@ class DesiSelector:
                  path_desi_tracer,
                  path_sim,
                  model_calibration,
-                 sim_patches,
                  z_range = [0,2], 
                  z_grid_points=481
                  ):
@@ -39,7 +38,6 @@ class DesiSelector:
         self.path_sim = path_sim
         self.model_calibration = model_calibration
         self.sim_patches = sim_patches
-        # self.sim_area = sim_area
         self.z_range = z_range
         self.z_grid_points = z_grid_points
 
@@ -75,10 +73,14 @@ class DesiSelector:
         pixels = dataset.region.pixels
         nside = dataset.region.nside
         sim_area = len(pixels)*hp.nside2pixarea(nside, degrees=True)
-        self.sim_area=sim_area
+        self.sim_area = sim_area
 
-        print(f'The total area spanned by these mocks is: {self.sim_area}')
+        print(f'The total area spanned by the mocks in {dict_model_calibrations[self.model_calibration]} is: {self.sim_area}')
 
+        # Get the patches that the mocks correspond to
+        sim_patches = np.unique(dataset.data['lc_patch'])
+        self.sim_patches = sim_patches
+        
         if self.desi_tracer == 'bgs':
             columns = ['ra', 'dec', 'redshift_true', 'lsst_r']
 
