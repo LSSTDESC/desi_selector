@@ -30,7 +30,9 @@ class DesiSelector:
                  path_sim,
                  model_calibration,
                  z_range = [0,2], 
-                 z_grid_points=481
+                 z_grid_points=481,
+                 select_biggest=True,
+                 synth_cores=False
                  ):
 
         self.desi_tracer = desi_tracer
@@ -39,7 +41,8 @@ class DesiSelector:
         self.model_calibration = model_calibration
         self.z_range = z_range
         self.z_grid_points = z_grid_points
-
+        self.select_biggest = select_biggest
+        self.synth_cores = synth_cores
 
         
         
@@ -48,7 +51,7 @@ class DesiSelector:
             self.threshold_col = 'lsst_r'
 
         elif self.desi_tracer == 'lrg':
-            self.threshold_col = 'log_halo_mass'
+            self.threshold_col = 'log_peak_sub_halo_mass'
 
         elif self.desi_tracer == 'elg':
             self.threshold_col = 'log_sfr'
@@ -68,7 +71,7 @@ class DesiSelector:
         list_sim_data = list(f for f in path_sim_data.glob("*.hdf5") if f.stem.startswith("lc_cores"))
 
         # Calculate the total area the mocks span on the sky 
-        dataset = oc.open(list_sim_data)
+        dataset = oc.open(list_sim_data, synth_cores=self.synth_cores)
         pixels = dataset.region.pixels
         nside = dataset.region.nside
         sim_area = len(pixels)*hp.nside2pixarea(nside, degrees=True)
@@ -81,16 +84,16 @@ class DesiSelector:
         self.sim_patches = sim_patches
         
         if self.desi_tracer == 'bgs':
-            columns = ['ra', 'dec', 'redshift_true', 'lsst_r']
+            columns = ['ra', 'dec', 'redshift_true', 'lsst_r', 'logmp_obs']
 
         elif self.desi_tracer == 'lrg':
             columns = ['ra', 'dec', 'redshift_true', 'logmp_obs']
 
         elif self.desi_tracer == 'elg':
-            columns = ['ra', 'dec', 'redshift_true', 'logsm_obs', 'logssfr_obs', 'lsst_g', 'lsst_r', 'lsst_z']
+            columns = ['ra', 'dec', 'redshift_true', 'logsm_obs', 'logssfr_obs', 'lsst_g', 'lsst_r', 'lsst_z', 'logmp_obs']
 
         elif self.desi_tracer == 'qso':
-            columns = ['ra', 'dec', 'redshift_true', 'black_hole_mass', 'black_hole_eddington_ratio']
+            columns = ['ra', 'dec', 'redshift_true', 'black_hole_mass', 'black_hole_eddington_ratio', 'logmp_obs']
         
         
         dataset = dataset.select(columns)
@@ -98,8 +101,12 @@ class DesiSelector:
         sim_cat = dataset.data.to_pandas()
         sim_cat['distance'] = DesiSelector.cosmo.comoving_distance(sim_cat['redshift_true']).value
 
+        
+        if self.desi_tracer == 'bgs':
+            sim_cat.rename(columns={'logmp_obs': 'log_peak_sub_halo_mass'}, inplace=True)
+        
         if self.desi_tracer == 'lrg':
-            sim_cat.rename(columns={'logmp_obs': 'log_halo_mass'}, inplace=True)
+            sim_cat.rename(columns={'logmp_obs': 'log_peak_sub_halo_mass'}, inplace=True)
 
         if self.desi_tracer == 'elg':
             sim_cat['log_sfr'] = sim_cat['logsm_obs'] + sim_cat['logssfr_obs']
@@ -143,11 +150,11 @@ class DesiSelector:
         
         # get the desi tracer number/deg2 data we want to match to 
         if self.desi_tracer == 'bgs':
-            EFF_AREA_NORTH = 5108.04
-            EFF_AREA_SOUTH = 2071.91
+            EFF_AREA_NORTH = 5108.0437685335755
+            EFF_AREA_SOUTH = 2071.9122137829345
             
-            path_north = '/global/homes/y/yoki/roman/desi_like_samples/diffsky/data/desi_sv_data/desi_bgs_ts_zenodo/BGS_BRIGHT_NGC_nz.txt'
-            path_south = '/global/homes/y/yoki/roman/desi_like_samples/diffsky/data/desi_sv_data/desi_bgs_ts_zenodo/BGS_BRIGHT_SGC_nz.txt'
+            path_north = '/global/homes/y/yoki/roman/desi_like_samples/diffsky/data/desi_sv_data/desi_bgs_ts_zenodo/BGS_BRIGHT-21.5_NGC_nz.txt'
+            path_south = '/global/homes/y/yoki/roman/desi_like_samples/diffsky/data/desi_sv_data/desi_bgs_ts_zenodo/BGS_BRIGHT-21.5_SGC_nz.txt'
             data_north = np.loadtxt(path_north)
             data_south = np.loadtxt(path_south)
             
@@ -219,8 +226,15 @@ class DesiSelector:
                 this_thres = 10**50 # set threshold to high value to not select anything
 
             else:
-                this_thres = np.percentile(a = this_cat[self.threshold_col], q = 100-self.z_frac[i]*100)
 
+                if self.select_biggest:
+                
+                    this_thres = np.percentile(a = this_cat[self.threshold_col], q = 100-self.z_frac[i]*100)
+
+                else:
+                    
+                    this_thres = np.percentile(a = this_cat[self.threshold_col], q = self.z_frac[i]*100)
+            
             thres_list.append(this_thres)
                         
                      
@@ -231,7 +245,15 @@ class DesiSelector:
         
         thres_of_z = interpolate.interp1d(self.new_z_center, self.thres_list,  fill_value=9E20, bounds_error=False)
         threshold_all = thres_of_z(self.sim_cat['redshift_true'])
-        mask_abundance = self.sim_cat[self.threshold_col] > threshold_all
+
+        if self.select_biggest:
+            
+            mask_abundance = self.sim_cat[self.threshold_col] > threshold_all
+
+        else:
+
+            mask_abundance = self.sim_cat[self.threshold_col] < threshold_all
+        
         mock_cat = self.sim_cat[mask_abundance]
 
         return mock_cat
