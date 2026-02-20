@@ -32,7 +32,8 @@ class DesiSelector:
                  z_range = [0,2], 
                  z_grid_points=481,
                  select_biggest=True,
-                 synth_cores=False
+                 synth_cores=False,
+                 threshold_col=None
                  ):
 
         self.desi_tracer = desi_tracer
@@ -43,21 +44,23 @@ class DesiSelector:
         self.z_grid_points = z_grid_points
         self.select_biggest = select_biggest
         self.synth_cores = synth_cores
+        self.threshold_col = threshold_col
 
         
-        
-        # column to use for threshold calculation
-        if self.desi_tracer == 'bgs':
-            self.threshold_col = 'lsst_r'
-
-        elif self.desi_tracer == 'lrg':
-            self.threshold_col = 'log_peak_sub_halo_mass'
-
-        elif self.desi_tracer == 'elg':
-            self.threshold_col = 'log_sfr'
-
-        elif self.desi_tracer == 'qso':
-            self.threshold_col = 'black_hole_mass'
+        if self.threshold_col is None:
+            
+            # column to use for threshold calculation
+            if self.desi_tracer == 'bgs':
+                self.threshold_col = 'log_peak_sub_halo_mass'
+    
+            elif self.desi_tracer == 'lrg':
+                self.threshold_col = 'log_peak_sub_halo_mass'
+    
+            elif self.desi_tracer == 'elg':
+                self.threshold_col = 'log_sfr'
+    
+            elif self.desi_tracer == 'qso':
+                self.threshold_col = 'black_hole_mass'
     
     
         
@@ -241,9 +244,16 @@ class DesiSelector:
         self.thres_list = thres_list
 
     def produce_desi_mock(self):
-
+   
         
-        thres_of_z = interpolate.interp1d(self.new_z_center, self.thres_list,  fill_value=9E20, bounds_error=False)
+        new_z_center_pad = np.insert(self.new_z_center, 0, self.new_z_center[0] - (self.new_z_center[1] - self.new_z_center[0])/2)
+        new_z_center_pad = np.append(self.new_z_center, self.new_z_center[-1] + (self.new_z_center[-1] - self.new_z_center[-2])/2)
+
+        thres_list_pad = np.insert(self.thres_list, 0, self.thres_list[0] - (self.thres_list[1] - self.thres_list[0])/2)
+        thres_list_pad = np.append(self.thres_list, self.thres_list[-1] + (self.thres_list[-1] - self.thres_list[-2])/2)
+        
+        
+        thres_of_z = interpolate.interp1d(new_z_center_pad, thres_list_pad,  fill_value=9E20, bounds_error=False)
         threshold_all = thres_of_z(self.sim_cat['redshift_true'])
 
         if self.select_biggest:
