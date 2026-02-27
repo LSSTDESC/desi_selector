@@ -11,6 +11,7 @@ from diffsky.data_loaders.hacc_utils import lightcone_utils
 import jax.random as jran
 import treecorr as tc
 import healpy as hp
+from time import time 
 
 
 class DesiSelector:
@@ -62,13 +63,12 @@ class DesiSelector:
             elif self.desi_tracer == 'qso':
                 self.threshold_col = 'black_hole_mass'
     
-    
-        
+
         dict_model_calibrations = {'tng': 'tng_latest', 
                            'um': 'smdpl_dr1_latest',
                            'gal': 'galacticus_in_plus_ex_situ_latest',
                            'hlwas_cosmos': 'hlwas_cosmos_260120_UM_latest',
-                           'cosmos': 'cosmos_260120_UM_latest'}
+                           'cosmos': 'hltds_cosmos_260215_02_17_2026'}
         
         path_sim_data = Path(f"{self.path_sim}/{dict_model_calibrations[self.model_calibration]}")
         list_sim_data = list(f for f in path_sim_data.glob("*.hdf5") if f.stem.startswith("lc_cores"))
@@ -87,26 +87,27 @@ class DesiSelector:
         self.sim_patches = sim_patches
         
         if self.desi_tracer == 'bgs':
-            columns = ['ra', 'dec', 'redshift_true', 'lsst_r', 'logmp_obs']
+            columns = ['ra', 'dec', 'redshift_true', 'lsst_r', 'logsm_obs', 'logmp_obs', 'central']
 
         elif self.desi_tracer == 'lrg':
-            columns = ['ra', 'dec', 'redshift_true', 'logmp_obs']
+            columns = ['ra', 'dec', 'redshift_true', 'logmp_obs', 'central']
 
         elif self.desi_tracer == 'elg':
-            columns = ['ra', 'dec', 'redshift_true', 'logsm_obs', 'logssfr_obs', 'lsst_g', 'lsst_r', 'lsst_z', 'logmp_obs']
+            columns = ['ra', 'dec', 'redshift_true', 'logsm_obs', 'logssfr_obs', 'lsst_g', 'lsst_r', 'lsst_z', 'logmp_obs', 'central']
 
         elif self.desi_tracer == 'qso':
-            columns = ['ra', 'dec', 'redshift_true', 'black_hole_mass', 'black_hole_eddington_ratio', 'logmp_obs']
+            columns = ['ra', 'dec', 'redshift_true', 'black_hole_mass', 'central']
         
         
         dataset = dataset.select(columns)
         dataset = dataset.with_redshift_range(self.z_range[0], self.z_range[1])
-        sim_cat = dataset.data.to_pandas()
+        sim_cat = dataset.get_data('pandas')
         sim_cat['distance'] = DesiSelector.cosmo.comoving_distance(sim_cat['redshift_true']).value
 
         
         if self.desi_tracer == 'bgs':
             sim_cat.rename(columns={'logmp_obs': 'log_peak_sub_halo_mass'}, inplace=True)
+            sim_cat.rename(columns={'logsm_obs': 'log_stellar_mass'}, inplace=True)
         
         if self.desi_tracer == 'lrg':
             sim_cat.rename(columns={'logmp_obs': 'log_peak_sub_halo_mass'}, inplace=True)
@@ -188,6 +189,8 @@ class DesiSelector:
             nz_avg = (nz_north + nz_south) / 2 
         
 
+        print(f'The redshift range of the tracer being emulated is {np.min(z_bin_min)} - {np.max(z_bin_max)}')
+        
         repeat_n = int((self.z_grid_points-1)/len(z_bin_center))
         new_z_bin_min = np.linspace(np.min(z_bin_min), np.max(z_bin_max),  self.z_grid_points)[:-1]
         new_z_bin_max = np.linspace(np.min(z_bin_min), np.max(z_bin_max),  self.z_grid_points)[1:]
@@ -200,17 +203,21 @@ class DesiSelector:
         values, edges = np.histogram(self.sim_cat['redshift_true'], bins=zgrid)
         values_sim = values / self.sim_area
         z_frac = interp_nz_avg / values_sim
-        z_frac = np.nan_to_num(z_frac, nan=0.0)
+        z_frac = np.nan_to_num(z_frac, nan=0.0, posinf=0.0, neginf=0.0)
         z_frac = np.minimum(z_frac, np.ones(len(z_frac))*0.99)
-        
+
+        print(f'The max value in z_frac is {np.max(z_frac)}')
 
         self.new_z_bin_min = new_z_bin_min
         self.new_z_center = new_z_center
         self.new_z_bin_max = new_z_bin_max
         self.z_frac = z_frac
         self.nz_avg = nz_avg
+
         
-            #return (new_z_bin_min, new_z_center, new_z_bin_max, z_frac)
+        # save the new z center
+        path_z_center = f'/global/homes/y/yoki/roman/desi_like_samples/diffsky/data/selection_z_centers/{self.desi_tracer}/{self.z_grid_points}_centers.npy'
+        np.save(path_z_center, self.new_z_center)
         
     
     def generate_threshold(self):
@@ -226,35 +233,38 @@ class DesiSelector:
             if len(this_cat) == 0:
                 
                 print(f"Empty bin: zmin={this_zmin}, zmax={this_zmax}")
-                this_thres = 10**50 # set threshold to high value to not select anything
+                this_thres = 10**30 # set threshold to high value to not select anything
 
             else:
 
                 if self.select_biggest:
                 
                     this_thres = np.percentile(a = this_cat[self.threshold_col], q = 100-self.z_frac[i]*100)
-
+    
                 else:
                     
                     this_thres = np.percentile(a = this_cat[self.threshold_col], q = self.z_frac[i]*100)
-            
+        
             thres_list.append(this_thres)
                         
                      
         self.thres_list = thres_list
 
-    def produce_desi_mock(self):
-   
-        
-        new_z_center_pad = np.insert(self.new_z_center, 0, self.new_z_center[0] - (self.new_z_center[1] - self.new_z_center[0])/2)
-        new_z_center_pad = np.append(self.new_z_center, self.new_z_center[-1] + (self.new_z_center[-1] - self.new_z_center[-2])/2)
 
-        thres_list_pad = np.insert(self.thres_list, 0, self.thres_list[0] - (self.thres_list[1] - self.thres_list[0])/2)
-        thres_list_pad = np.append(self.thres_list, self.thres_list[-1] + (self.thres_list[-1] - self.thres_list[-2])/2)
+    def produce_desi_mock(self):
+        # new_z_center_pad = np.insert(self.new_z_center, 0, self.new_z_center[0] - (self.new_z_center[1] - self.new_z_center[0])/2)
+        # new_z_center_pad = np.append(self.new_z_center, self.new_z_center[-1] + (self.new_z_center[-1] - self.new_z_center[-2])/2)
+
+        # thres_list_pad = np.insert(self.thres_list, 0, self.thres_list[0] - (self.thres_list[1] - self.thres_list[0])/2)
+        # thres_list_pad = np.append(self.thres_list, self.thres_list[-1] + (self.thres_list[-1] - self.thres_list[-2])/2)
         
         
-        thres_of_z = interpolate.interp1d(new_z_center_pad, thres_list_pad,  fill_value=9E20, bounds_error=False)
+        thres_of_z = interpolate.interp1d(self.new_z_center, self.thres_list,  fill_value="extrapolate", bounds_error=False)
         threshold_all = thres_of_z(self.sim_cat['redshift_true'])
+
+        # save the threshold values
+        path_threshold = f'/global/homes/y/yoki/roman/desi_like_samples/diffsky/data/selection_thresholds/{self.desi_tracer}/{self.threshold_col}_thres.npy'
+        np.save(path_threshold, threshold_all)
 
         if self.select_biggest:
             
