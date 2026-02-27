@@ -27,12 +27,14 @@ class DesiPhotSelector:
     def __init__(self, 
                  desi_tracer,
                  path_sim,
-                 model_calibration
+                 model_calibration,
+                 z_range
                  ):
 
         self.desi_tracer = desi_tracer
         self.path_sim = path_sim
         self.model_calibration = model_calibration
+        self.z_range = z_range
 
     
 
@@ -73,6 +75,7 @@ class DesiPhotSelector:
         
         
         dataset = dataset.select(columns)
+        dataset = dataset.with_redshift_range(self.z_range[0], self.z_range[1])
         sim_cat = dataset.data.to_pandas()
         sim_cat['distance'] = DesiPhotSelector.cosmo.comoving_distance(sim_cat['redshift_true']).value
         self.sim_cat = sim_cat
