@@ -34,6 +34,7 @@ class DesiSelector:
                  z_grid_points=481,
                  select_biggest=True,
                  synth_cores=False,
+                 reload_oc=True,
                  threshold_col=None
                  ):
 
@@ -45,6 +46,7 @@ class DesiSelector:
         self.z_grid_points = z_grid_points
         self.select_biggest = select_biggest
         self.synth_cores = synth_cores
+        self.reload_oc = reload_oc
         self.threshold_col = threshold_col
 
         
@@ -68,7 +70,7 @@ class DesiSelector:
                            'um': 'smdpl_dr1_latest',
                            'gal': 'galacticus_in_plus_ex_situ_latest',
                            'hlwas_cosmos': 'hlwas_cosmos_260120_UM_latest',
-                           'cosmos': 'hltds_cosmos_260215_02_17_2026'}
+                           'cosmos': 'cosmos_260120_UM_latest'}
         
         path_sim_data = Path(f"{self.path_sim}/{dict_model_calibrations[self.model_calibration]}")
         list_sim_data = list(f for f in path_sim_data.glob("*.hdf5") if f.stem.startswith("lc_cores"))
@@ -81,28 +83,39 @@ class DesiSelector:
         self.sim_area = sim_area
 
         print(f'The total area spanned by the mocks in {dict_model_calibrations[self.model_calibration]} is: {self.sim_area}')
-
-        # Get the patches that the mocks correspond to
-        sim_patches = np.unique(dataset.data['lc_patch'])
-        self.sim_patches = sim_patches
+        
         
         if self.desi_tracer == 'bgs':
-            columns = ['ra', 'dec', 'redshift_true', 'lsst_r', 'logsm_obs', 'logmp_obs', 'central']
+            columns = ['ra', 'dec', 'redshift_true', 'lsst_r', 'logsm_obs', 'logmp_obs', 'central', 'lc_patch']
 
         elif self.desi_tracer == 'lrg':
-            columns = ['ra', 'dec', 'redshift_true', 'logmp_obs', 'central']
+            columns = ['ra', 'dec', 'redshift_true', 'logmp_obs', 'central', 'lc_patch']
 
         elif self.desi_tracer == 'elg':
-            columns = ['ra', 'dec', 'redshift_true', 'logsm_obs', 'logssfr_obs', 'lsst_g', 'lsst_r', 'lsst_z', 'logmp_obs', 'central']
+            columns = ['ra', 'dec', 'redshift_true', 'logsm_obs', 'logssfr_obs', 'lsst_g', 'lsst_r', 'lsst_z', 'logmp_obs', 'central', 'lc_patch']
 
         elif self.desi_tracer == 'qso':
-            columns = ['ra', 'dec', 'redshift_true', 'black_hole_mass', 'central']
+            columns = ['ra', 'dec', 'redshift_true', 'black_hole_mass', 'central', 'lc_patch']
         
-        
-        dataset = dataset.select(columns)
-        dataset = dataset.with_redshift_range(self.z_range[0], self.z_range[1])
-        sim_cat = dataset.get_data('pandas')
-        sim_cat['distance'] = DesiSelector.cosmo.comoving_distance(sim_cat['redshift_true']).value
+
+
+        if self.reload_oc:
+            
+            dataset = dataset.select(columns)
+            dataset = dataset.with_redshift_range(self.z_range[0], self.z_range[1])
+            sim_cat = dataset.get_data('pandas')
+            sim_cat['distance'] = DesiSelector.cosmo.comoving_distance(sim_cat['redshift_true']).value
+
+            sim_cat_filename = f"/global/homes/y/yoki/roman/desi_like_samples/diffsky/data/sim_data/{desi_tracer}/{dict_model_calibrations[self.model_calibration]}_{self.sim_area}.parquet"
+            sim_cat.to_parquet(sim_cat_filename)
+        else:
+            
+            sim_cat_filename = f"/global/homes/y/yoki/roman/desi_like_samples/diffsky/data/sim_data/{desi_tracer}/{dict_model_calibrations[self.model_calibration]}_{self.sim_area}.parquet"
+            
+            if Path(sim_cat_filename).exists():
+                
+                sim_cat = pd.read_parquet(sim_cat_filename)
+
 
         
         if self.desi_tracer == 'bgs':
@@ -252,13 +265,7 @@ class DesiSelector:
 
 
     def produce_desi_mock(self):
-        # new_z_center_pad = np.insert(self.new_z_center, 0, self.new_z_center[0] - (self.new_z_center[1] - self.new_z_center[0])/2)
-        # new_z_center_pad = np.append(self.new_z_center, self.new_z_center[-1] + (self.new_z_center[-1] - self.new_z_center[-2])/2)
-
-        # thres_list_pad = np.insert(self.thres_list, 0, self.thres_list[0] - (self.thres_list[1] - self.thres_list[0])/2)
-        # thres_list_pad = np.append(self.thres_list, self.thres_list[-1] + (self.thres_list[-1] - self.thres_list[-2])/2)
-        
-        
+      
         thres_of_z = interpolate.interp1d(self.new_z_center, self.thres_list,  fill_value="extrapolate", bounds_error=False)
         threshold_all = thres_of_z(self.sim_cat['redshift_true'])
 
@@ -279,10 +286,11 @@ class DesiSelector:
         return mock_cat
 
     def produce_desi_rands(self, mock_cat=None):
-
+        
+        sim_patches = np.unique(self.sim_cat['lc_patch'])
 
         RAND_TO_DATA_RATIO = 10
-        npatches = len(self.sim_patches)
+        npatches = len(sim_patches)
         ntot = int(len(mock_cat)* RAND_TO_DATA_RATIO / npatches)
         lc_path = '/global/homes/y/yoki/roman/desi_like_samples/diffsky/data/lc_metadata/lc_cores-decomposition.txt'
         lc_cores_decomp = lightcone_utils.read_lc_ra_dec_patch_decomposition(lc_path)[0]
@@ -300,7 +308,7 @@ class DesiSelector:
         list_ra = []
         list_dec = []
         
-        for patch in self.sim_patches:
+        for patch in sim_patches:
             
             ra_loop, dec_loop = lc_utils.mc_lightcone_random_ra_dec(ran_key=ran_key, npts=ntot, ra_min=ra_min[patch],
             ra_max=ra_max[patch], dec_min=dec_min[patch], dec_max=dec_max[patch])
