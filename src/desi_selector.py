@@ -29,7 +29,7 @@ class DesiSelector:
                  desi_tracer,
                  path_desi_tracer,
                  path_sim,
-                 model_calibration,
+                 calibration_version,
                  z_range = [0,2], 
                  z_grid_points=481,
                  select_biggest=True,
@@ -41,7 +41,7 @@ class DesiSelector:
         self.desi_tracer = desi_tracer
         self.path_desi_tracer = path_desi_tracer
         self.path_sim = path_sim
-        self.model_calibration = model_calibration
+        self.calibration_version = calibration_version
         self.z_range = z_range
         self.z_grid_points = z_grid_points
         self.select_biggest = select_biggest
@@ -64,15 +64,10 @@ class DesiSelector:
     
             elif self.desi_tracer == 'qso':
                 self.threshold_col = 'black_hole_mass'
-    
 
-        dict_model_calibrations = {'tng': 'tng_latest', 
-                           'um': 'smdpl_dr1_latest',
-                           'gal': 'galacticus_in_plus_ex_situ_latest',
-                           'hlwas_cosmos': 'hlwas_cosmos_260120_UM_latest',
-                           'cosmos': 'cosmos_260120_UM_latest'}
         
-        path_sim_data = Path(f"{self.path_sim}/{dict_model_calibrations[self.model_calibration]}")
+        
+        path_sim_data = Path(f"{self.path_sim}/{self.calibration_version}")
         list_sim_data = list(f for f in path_sim_data.glob("*.hdf5") if f.stem.startswith("lc_cores"))
 
         # Calculate the total area the mocks span on the sky 
@@ -82,7 +77,7 @@ class DesiSelector:
         sim_area = len(pixels)*hp.nside2pixarea(nside, degrees=True)
         self.sim_area = sim_area
 
-        print(f'The total area spanned by the mocks in {dict_model_calibrations[self.model_calibration]} is: {self.sim_area}')
+        print(f'The total area spanned by the mocks in {self.calibration_version} is: {self.sim_area}')
         
         
         if self.desi_tracer == 'bgs':
@@ -96,7 +91,7 @@ class DesiSelector:
 
         elif self.desi_tracer == 'qso':
             columns = ['ra', 'dec', 'redshift_true', 'black_hole_mass', 'central', 'lc_patch']
-        
+              
 
 
         if self.reload_oc:
@@ -106,11 +101,11 @@ class DesiSelector:
             sim_cat = dataset.get_data('pandas')
             sim_cat['distance'] = DesiSelector.cosmo.comoving_distance(sim_cat['redshift_true']).value
 
-            sim_cat_filename = f"/global/homes/y/yoki/roman/desi_like_samples/diffsky/data/sim_data/{desi_tracer}/{dict_model_calibrations[self.model_calibration]}_{self.sim_area}.parquet"
+            sim_cat_filename = f"/global/homes/y/yoki/roman/desi_like_samples/diffsky/data/sim_data/{desi_tracer}/{self.calibration_version}_{self.sim_area}.parquet"
             sim_cat.to_parquet(sim_cat_filename)
         else:
             
-            sim_cat_filename = f"/global/homes/y/yoki/roman/desi_like_samples/diffsky/data/sim_data/{desi_tracer}/{dict_model_calibrations[self.model_calibration]}_{self.sim_area}.parquet"
+            sim_cat_filename = f"/global/homes/y/yoki/roman/desi_like_samples/diffsky/data/sim_data/{desi_tracer}/{self.calibration_version}_{self.sim_area}.parquet"
             
             if Path(sim_cat_filename).exists():
                 
@@ -162,6 +157,7 @@ class DesiSelector:
             z_bin_center = tracer_data['z'][z_mask]
             z_bin_min = z_bin_center - 0.050/2
             z_bin_max = z_bin_center + 0.050/2
+
         
 
         
@@ -200,7 +196,14 @@ class DesiSelector:
             nz_north = tracer_data['n_z_north'][z_mask]
             nz_south = tracer_data['n_z_south'][z_mask]
             nz_avg = (nz_north + nz_south) / 2 
-        
+
+       
+        elif self.desi_tracer == 'qso':
+            tracer_data = table.Table.read(self.path_desi_tracer,  format='ascii.ecsv')
+            z_mask = np.logical_and(tracer_data['z'] > self.z_range[0], tracer_data['z'] < self.z_range[1])
+            z_bin_center = tracer_data['z'][z_mask]
+            z_bin_min = z_bin_center - 0.050/2
+            z_bin_max = z_bin_center + 0.050/2
 
         print(f'The redshift range of the tracer being emulated is {np.min(z_bin_min)} - {np.max(z_bin_max)}')
         
@@ -379,17 +382,5 @@ class DesiSelector:
                'var_xi_naive': var_xi_naive}
     
     
-    # def measure_auto_corr(self):
 
-    # def compare_auto_corr(self):
-        
-
-
-    # def run(self):
-
-    #     self.prepare_threshold()
-
-    #     self.generate_threshold()
-
-    #     self.produce_mock()
         

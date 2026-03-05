@@ -27,24 +27,19 @@ class DesiPhotSelector:
     def __init__(self, 
                  desi_tracer,
                  path_sim,
-                 model_calibration,
+                 calibration_version,
                  z_range
                  ):
 
         self.desi_tracer = desi_tracer
         self.path_sim = path_sim
-        self.model_calibration = model_calibration
+        self.calibration_version = calibration_version
         self.z_range = z_range
 
     
 
-        dict_model_calibrations = {'tng': 'tng_latest', 
-                           'um': 'smdpl_dr1_latest',
-                           'gal': 'galacticus_in_plus_ex_situ_latest',
-                           'hlwas_cosmos': 'hlwas_cosmos_260120_UM_latest',
-                           'cosmos': 'cosmos_260120_UM_latest'}
         
-        path_sim_data = Path(f"{self.path_sim}/{dict_model_calibrations[self.model_calibration]}")
+        path_sim_data = Path(f"{self.path_sim}/{calibration_version}")
         list_sim_data = list(f for f in path_sim_data.glob("*.hdf5") if f.stem.startswith("lc_cores"))
         dataset = oc.open(list_sim_data)
 
@@ -55,24 +50,15 @@ class DesiPhotSelector:
         sim_area = len(pixels)*hp.nside2pixarea(nside, degrees=True)
         self.sim_area = sim_area
 
-        print(f'The total area spanned by the mocks in {dict_model_calibrations[self.model_calibration]} is: {self.sim_area}')
+        print(f'The total area spanned by the mocks in {self.calibration_version} is: {self.sim_area}')
 
-        # Get the patches that the mocks correspond to
-        sim_patches = np.unique(dataset.data['lc_patch'])
-        self.sim_patches = sim_patches
 
         if self.desi_tracer == 'bgs':
-            columns = ['ra', 'dec', 'redshift_true', 'lsst_r']
-
-        elif self.desi_tracer == 'lrg':
-            columns = ['ra', 'dec', 'redshift_true', 'lsst_g', 'lsst_r', 'lsst_z']
+            columns = ['ra', 'dec', 'redshift_true', 'lsst_r', 'lc_patch']
 
         elif self.desi_tracer == 'elg':
-            columns = ['ra', 'dec', 'redshift_true', 'lsst_g', 'lsst_r', 'lsst_z']
+            columns = ['ra', 'dec', 'redshift_true', 'lsst_g', 'lsst_r', 'lsst_z', 'lc_patch']
 
-        elif self.desi_tracer == 'qso':
-            columns = ['ra', 'dec', 'redshift_true', 'lsst_g', 'lsst_r', 'lsst_z']
-        
         
         dataset = dataset.select(columns)
         dataset = dataset.with_redshift_range(self.z_range[0], self.z_range[1])
@@ -111,9 +97,10 @@ class DesiPhotSelector:
     
     def produce_desi_rands(self, mock_cat=None):
 
+        sim_patches = np.unique(self.sim_cat['lc_patch'])
 
         RAND_TO_DATA_RATIO = 10
-        npatches = len(self.sim_patches)
+        npatches = len(sim_patches)
         ntot = int(len(mock_cat)* RAND_TO_DATA_RATIO / npatches)
         lc_path = '/global/homes/y/yoki/roman/desi_like_samples/diffsky/data/lc_metadata/lc_cores-decomposition.txt'
         lc_cores_decomp = lightcone_utils.read_lc_ra_dec_patch_decomposition(lc_path)[0]
@@ -131,7 +118,7 @@ class DesiPhotSelector:
         list_ra = []
         list_dec = []
         
-        for patch in self.sim_patches:
+        for patch in sim_patches:
             
             ra_loop, dec_loop = lc_utils.mc_lightcone_random_ra_dec(ran_key=ran_key, npts=ntot, ra_min=ra_min[patch],
             ra_max=ra_max[patch], dec_min=dec_min[patch], dec_max=dec_max[patch])
@@ -201,17 +188,5 @@ class DesiPhotSelector:
                "xi_naive": xi_s_naive,
                'var_xi_naive': var_xi_naive}
         
-    # def measure_auto_corr(self):
 
-    # def compare_auto_corr(self):
-        
-
-
-    # def run(self):
-
-    #     self.prepare_threshold()
-
-    #     self.generate_threshold()
-
-    #     self.produce_mock()
         
