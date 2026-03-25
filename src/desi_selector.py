@@ -11,7 +11,6 @@ from diffsky.data_loaders.hacc_utils import lightcone_utils
 import jax.random as jran
 import treecorr as tc
 import healpy as hp
-from time import time 
 
 
 class DesiSelector:
@@ -35,7 +34,8 @@ class DesiSelector:
                  select_biggest=True,
                  synth_cores=False,
                  reload_oc=True,
-                 threshold_col=None
+                 threshold_col=None,
+                 sigma_dex=None
                  ):
 
         self.desi_tracer = desi_tracer
@@ -48,6 +48,7 @@ class DesiSelector:
         self.synth_cores = synth_cores
         self.reload_oc = reload_oc
         self.threshold_col = threshold_col
+        self.sigma_dex = sigma_dex
 
         
         if self.threshold_col is None:
@@ -122,6 +123,12 @@ class DesiSelector:
 
         if self.desi_tracer == 'elg':
             sim_cat['log_sfr'] = sim_cat['logsm_obs'] + sim_cat['logssfr_obs']
+
+        if self.desi_tracer == 'qso':
+            sigma_nat = self.sigma_dex * np.log(10)
+            
+            noise = np.random.lognormal(mean=0, sigma=sigma_nat, size=len(sim_cat))
+            sim_cat['black_hole_mass_noisy'] = sim_cat['black_hole_mass'] * noise    
 
         self.sim_cat = sim_cat
 
@@ -211,9 +218,15 @@ class DesiSelector:
         new_z_bin_min = np.linspace(np.min(z_bin_min), np.max(z_bin_max),  self.z_grid_points)[:-1]
         new_z_bin_max = np.linspace(np.min(z_bin_min), np.max(z_bin_max),  self.z_grid_points)[1:]
         new_z_center = (new_z_bin_max + new_z_bin_min) / 2
+        
+        z_bin_center_pad = np.insert(z_bin_center, 0, z_bin_center[0] - (z_bin_center[1] - z_bin_center[0])/2)
+        z_bin_center_pad = np.append(z_bin_center_pad , z_bin_center[-1] + (z_bin_center[-1] - z_bin_center[-2])/2)
+        
+        nz_avg_pad = np.insert(nz_avg, 0, nz_avg[0])
+        nz_avg_pad = np.append(nz_avg_pad, nz_avg[-1])
 
-        interp_func = interp1d(z_bin_center, nz_avg, fill_value=0, bounds_error=False)
-        interp_nz_avg = interp_func(new_z_center) / repeat_n
+        interp_nz_avg_func = interp1d(z_bin_center_pad, nz_avg_pad, fill_value=0, bounds_error=False)
+        interp_nz_avg = interp_nz_avg_func(new_z_center) / repeat_n
 
         zgrid = np.linspace(np.min(z_bin_min), np.max(z_bin_max), self.z_grid_points)
         values, edges = np.histogram(self.sim_cat['redshift_true'], bins=zgrid)
@@ -249,7 +262,7 @@ class DesiSelector:
             if len(this_cat) == 0:
                 
                 print(f"Empty bin: zmin={this_zmin}, zmax={this_zmax}")
-                this_thres = 10**30 # set threshold to high value to not select anything
+                this_thres = 10**40 # set threshold to high value to not select anything
 
             else:
 
