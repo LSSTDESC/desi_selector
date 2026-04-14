@@ -35,7 +35,8 @@ class DesiSelector:
                  synth_cores=False,
                  reload_oc=True,
                  threshold_col=None,
-                 sigma_dex=None
+                 sigma_dex=None,
+                 weight=None
                  ):
 
         self.desi_tracer = desi_tracer
@@ -49,6 +50,7 @@ class DesiSelector:
         self.reload_oc = reload_oc
         self.threshold_col = threshold_col
         self.sigma_dex = sigma_dex
+        self.weight = weight
 
         
         if self.threshold_col is None:
@@ -82,16 +84,16 @@ class DesiSelector:
         
         
         if self.desi_tracer == 'bgs':
-            columns = ['ra', 'dec', 'redshift_true', 'lsst_r', 'logsm_obs', 'logmp_obs', 'central', 'lc_patch']
+            columns = ['ra', 'dec', 'redshift_true', 'lsst_r', 'logsm_obs', 'logmp_obs', 'logmp_obs_host', 'central', 'lc_patch']
 
         elif self.desi_tracer == 'lrg':
-            columns = ['ra', 'dec', 'redshift_true', 'logmp_obs', 'central', 'lc_patch']
+            columns = ['ra', 'dec', 'redshift_true', 'logmp_obs', 'logmp_obs_host', 'central', 'lc_patch']
 
         elif self.desi_tracer == 'elg':
-            columns = ['ra', 'dec', 'redshift_true', 'logsm_obs', 'logssfr_obs', 'lsst_g', 'lsst_r', 'lsst_z', 'logmp_obs', 'central', 'lc_patch']
+            columns = ['ra', 'dec', 'redshift_true', 'logsm_obs', 'logssfr_obs', 'lsst_g', 'lsst_r', 'lsst_z', 'logmp_obs', 'logmp_obs_host', 'central', 'lc_patch']
 
         elif self.desi_tracer == 'qso':
-            columns = ['ra', 'dec', 'redshift_true', 'black_hole_mass', 'central', 'lc_patch']
+            columns = ['ra', 'dec', 'redshift_true', 'black_hole_mass', 'logmp_obs', 'logmp_obs_host', 'central', 'lc_patch']
               
 
 
@@ -102,33 +104,46 @@ class DesiSelector:
             sim_cat = dataset.get_data('pandas')
             sim_cat['distance'] = DesiSelector.cosmo.comoving_distance(sim_cat['redshift_true']).value
 
-            sim_cat_filename = f"/global/homes/y/yoki/roman/desi_like_samples/diffsky/data/sim_data/{desi_tracer}/{self.calibration_version}_{self.sim_area}.parquet"
+            sim_cat_filename = f"/global/homes/y/yoki/roman/desi_like_samples/diffsky/data/sim_data/{desi_tracer}/{self.calibration_version}_{self.sim_area}_{self.threshold_col}.parquet"
             sim_cat.to_parquet(sim_cat_filename)
         else:
             
-            sim_cat_filename = f"/global/homes/y/yoki/roman/desi_like_samples/diffsky/data/sim_data/{desi_tracer}/{self.calibration_version}_{self.sim_area}.parquet"
+            sim_cat_filename = f"/global/homes/y/yoki/roman/desi_like_samples/diffsky/data/sim_data/{desi_tracer}/{self.calibration_version}_{self.sim_area}_{self.threshold_col}.parquet"
             
             if Path(sim_cat_filename).exists():
                 
                 sim_cat = pd.read_parquet(sim_cat_filename)
 
 
-        
+        # Columns to abundance match with
         if self.desi_tracer == 'bgs':
             sim_cat.rename(columns={'logmp_obs': 'log_peak_sub_halo_mass'}, inplace=True)
             sim_cat.rename(columns={'logsm_obs': 'log_stellar_mass'}, inplace=True)
+
+            if self.sigma_dex is not None:
+                noise = np.random.normal(loc=0, scale=self.sigma_dex, size=len(sim_cat)) 
+                sim_cat['log_peak_sub_halo_mass_noisy'] = sim_cat['log_peak_sub_halo_mass'] + noise
         
         if self.desi_tracer == 'lrg':
             sim_cat.rename(columns={'logmp_obs': 'log_peak_sub_halo_mass'}, inplace=True)
 
+            if self.sigma_dex is not None:
+                noise = np.random.normal(loc=0, scale=self.sigma_dex, size=len(sim_cat)) 
+                sim_cat['log_peak_sub_halo_mass_noisy'] = sim_cat['log_peak_sub_halo_mass'] + noise
+
         if self.desi_tracer == 'elg':
             sim_cat['log_sfr'] = sim_cat['logsm_obs'] + sim_cat['logssfr_obs']
 
+            if self.weight is not None:
+                sim_cat['log_sfr_times_wmass'] = sim_cat['log_sfr'] + self.weight*sim_cat['logsm_obs']
+
         if self.desi_tracer == 'qso':
-            sigma_nat = self.sigma_dex * np.log(10)
             
-            noise = np.random.lognormal(mean=0, sigma=sigma_nat, size=len(sim_cat))
-            sim_cat['black_hole_mass_noisy'] = sim_cat['black_hole_mass'] * noise    
+            if self.sigma_dex is not None:
+
+                sigma_nat = self.sigma_dex * np.log(10)
+                noise = np.random.lognormal(mean=0, sigma=sigma_nat, size=len(sim_cat))
+                sim_cat['black_hole_mass_noisy'] = sim_cat['black_hole_mass'] * noise    
 
         self.sim_cat = sim_cat
 
@@ -146,8 +161,8 @@ class DesiSelector:
         
         elif self.desi_tracer == 'lrg':
             tracer_data = pd.read_csv(self.path_desi_tracer, index_col=False)
-            z_bin_min = tracer_data['zmin']
-            z_bin_max = tracer_data['zmax']
+            z_bin_min = tracer_data['zmin'].to_numpy()
+            z_bin_max = tracer_data['zmax'].to_numpy()
             z_bin_center = (z_bin_min + z_bin_max) / 2
 
         
@@ -184,7 +199,7 @@ class DesiSelector:
 
         
         elif self.desi_tracer == 'lrg':
-            nz_avg = tracer_data['n_desi_lrg']
+            nz_avg = tracer_data['n_desi_lrg'].to_numpy()
 
         
         elif self.desi_tracer == 'elg':
@@ -204,13 +219,6 @@ class DesiSelector:
             nz_south = tracer_data['n_z_south'][z_mask]
             nz_avg = (nz_north + nz_south) / 2 
 
-       
-        elif self.desi_tracer == 'qso':
-            tracer_data = table.Table.read(self.path_desi_tracer,  format='ascii.ecsv')
-            z_mask = np.logical_and(tracer_data['z'] > self.z_range[0], tracer_data['z'] < self.z_range[1])
-            z_bin_center = tracer_data['z'][z_mask]
-            z_bin_min = z_bin_center - 0.050/2
-            z_bin_max = z_bin_center + 0.050/2
 
         print(f'The redshift range of the tracer being emulated is {np.min(z_bin_min)} - {np.max(z_bin_max)}')
         
