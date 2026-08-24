@@ -1,4 +1,5 @@
 ##
+*.json
 *.csv
 *.hdf5
 *.parquet
